@@ -69,14 +69,22 @@ function render() {
   if (!chrome) return bad("no Chrome/Chromium binary found (set CHROME_BIN)");
 
   const url = "file:///" + PAGE.replace(/\\/g, "/");
+  // --no-sandbox / --disable-dev-shm-usage are required for Chrome >= 120 in
+  // containers (a CI runner has no user namespace and a 64 MB /dev/shm);
+  // without them the process dies instantly and dump-dom returns 0 bytes.
   const r = spawnSync(chrome, [
-    "--headless=new", "--disable-gpu", "--enable-unsafe-swiftshader",
+    "--headless=new", "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu-sandbox",
+    "--disable-gpu", "--enable-unsafe-swiftshader",
     "--hide-scrollbars", "--window-size=1600,1000",
     "--virtual-time-budget=12000", "--dump-dom", url,
   ], { encoding: "utf8", maxBuffer: 96 * 1024 * 1024, timeout: 180000 });
 
   const dom = r.stdout || "";
-  if (dom.length < 2000) return bad("headless render produced no DOM (" + dom.length + " bytes)");
+  if (dom.length < 2000) {
+    const why = (r.stderr || "").split("
+").filter((l) => /error|Error|FATAL/.test(l)).slice(0, 4).join(" | ");
+    return bad(`headless render produced no DOM (${dom.length} bytes, exit ${r.status}) ${why}`.slice(0, 600));
+  }
   ok(`headless DOM captured (${(dom.length / 1024).toFixed(0)} KB)`);
 
   // Extract a container's inner HTML by scanning literal tags and counting
