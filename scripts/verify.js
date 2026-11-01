@@ -81,9 +81,8 @@ function render() {
 
   const dom = r.stdout || "";
   if (dom.length < 2000) {
-    const why = (r.stderr || "").split("
-").filter((l) => /error|Error|FATAL/.test(l)).slice(0, 4).join(" | ");
-    return bad(`headless render produced no DOM (${dom.length} bytes, exit ${r.status}) ${why}`.slice(0, 600));
+    const why = (r.stderr || "").replace(/\s+/g, " ").slice(0, 300);
+    return bad("headless render produced no DOM (" + dom.length + " bytes, exit " + r.status + ") " + why);
   }
   ok(`headless DOM captured (${(dom.length / 1024).toFixed(0)} KB)`);
 
