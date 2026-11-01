@@ -1,0 +1,9 @@
+.check.js
+.probe.html
+.test_*.html
+.dom.html
+artifacts/
+shot*.png
+*.log
+__pycache__/
+.venv/

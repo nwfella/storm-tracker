@@ -1,0 +1,61 @@
+name: refresh
+
+on:
+  schedule:
+    - cron: "12 * * * *" # hourly, off the top of the hour to dodge runner queue
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  bake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Exits non-zero if every upstream is unreachable, so a total outage never
+      # commits an empty globe over good data.
+      - name: Pull every active tropical cyclone
+        run: python scripts/fetch_storms.py
+
+      - name: Inline data into the page
+        run: python scripts/build.py
+
+      - name: Install headless Chrome
+        run: npx --yes @puppeteer/browsers install chrome@stable --path "$RUNNER_TEMP/chrome"
+        continue-on-error: true
+
+      - name: Render gate
+        env:
+          CHROME_BIN: ${{ runner.temp }}/chrome
+        run: |
+          BIN=$(find "$RUNNER_TEMP/chrome" -name 'chrome' -type f -perm -u+x | head -1)
+          echo "chrome: $BIN"
+          if [ -n "$BIN" ]; then export CHROME_BIN="$BIN"; fi
+          node scripts/verify.js
+
+      - name: Commit snapshot + site
+        run: |
+          git config user.name  "storm-tracker-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add data index.html
+          if git diff --cached --quiet; then
+            echo "no change this hour"
+          else
+            git commit -m "chore: snapshot $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push
+          fi
