@@ -728,6 +728,14 @@ function strokeRuns(g,runs,style,width,dash,dashOffset){
 }
 
 let t0=performance.now();
+
+/* Test seam. Headless CI renders through SwiftShader at ~4 fps, so an endless
+   requestAnimationFrame loop never lets --virtual-time-budget expire and
+   --dump-dom hangs until it is killed. With ?probe=1 the loop stops after a
+   fixed number of frames and drops a breadcrumb in the title, which lets the
+   render gate assert that the pipeline actually ran. */
+const PROBE=/[?&]probe=1/.test(location.search);
+let frames=0;
 function drawOverlay(now){
   const g=octx;
   g.setTransform(dpr,0,0,dpr,0,0);
@@ -892,6 +900,9 @@ function render(){
   drawOverlay(now);
   updateMarkers();
   updateReadout();
+  frames++;
+  if(PROBE && frames===1) document.title='RENDER_OK:1';
+  if(PROBE && frames>=12) return;
   requestAnimationFrame(render);
 }
 

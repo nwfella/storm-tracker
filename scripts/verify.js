@@ -68,7 +68,7 @@ function render() {
   const chrome = findChrome();
   if (!chrome) return bad("no Chrome/Chromium binary found (set CHROME_BIN)");
 
-  const url = "file:///" + PAGE.replace(/\\/g, "/");
+  const url = "file:///" + PAGE.replace(/\\/g, "/") + "?probe=1";
   // --no-sandbox / --disable-dev-shm-usage are required for Chrome >= 120 in
   // containers (a CI runner has no user namespace and a 64 MB /dev/shm);
   // without them the process dies instantly and dump-dom returns 0 bytes.
@@ -76,8 +76,8 @@ function render() {
     "--headless=new", "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu-sandbox",
     "--disable-gpu", "--enable-unsafe-swiftshader",
     "--hide-scrollbars", "--window-size=1600,1000",
-    "--virtual-time-budget=12000", "--dump-dom", url,
-  ], { encoding: "utf8", maxBuffer: 96 * 1024 * 1024, timeout: 180000 });
+    "--virtual-time-budget=15000", "--dump-dom", url,
+  ], { encoding: "utf8", maxBuffer: 96 * 1024 * 1024, timeout: 120000 });
 
   const dom = r.stdout || "";
   if (dom.length < 2000) {
@@ -85,6 +85,9 @@ function render() {
     return bad("headless render produced no DOM (" + dom.length + " bytes, exit " + r.status + ") " + why);
   }
   ok(`headless DOM captured (${(dom.length / 1024).toFixed(0)} KB)`);
+  const title = (dom.match(/<title>([^<]*)<\/title>/) || [])[1] || "";
+  if (!/RENDER_OK/.test(title)) bad("render loop never completed a frame (title=" + title.slice(0, 60) + ")");
+  else ok("render loop completed " + title.split(":")[1] + " frames");
 
   // Extract a container's inner HTML by scanning literal tags and counting
   // nesting. No RegExp for the tags: an escaped  inside a string-built
